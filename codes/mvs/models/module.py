@@ -11,12 +11,46 @@ class FeatureNet(nn.Module):
             F.Conv2d(1, 8, (3,3), stride=1),
             F.ReLU(),
             F.BatchNorm2d(3),
+            F.ReLU(),
+            F.Conv2d(8, 8, (3,3), stride=1),
+            F.ReLU(),
+            F.BatchNorm2d(3),
+            F.ReLU(),
+            F.Conv2d(8, 16, (5, 5), stride=2),
+            F.ReLU(),
+            F.BatchNorm2d(3),
+            F.ReLU(),
+            F.Conv2d(16, 16, (3, 3), stride=1),
+            F.ReLU(),
+            F.BatchNorm2d(3),
+            F.ReLU(),
+            F.Conv2d(16, 16, (3, 3), stride=1),
+            F.ReLU(),
+            F.BatchNorm2d(3),
+            F.ReLU(),
+            F.Conv2d(16, 32, (5, 5), stride=2),
+            F.ReLU(),
+            F.BatchNorm2d(3),
+            F.ReLU(),
+            F.Conv2d(32, 32, (3, 3), stride=1),
+            F.ReLU(),
+            F.BatchNorm2d(3),
+            F.ReLU(),
+            F.Conv2d(32, 32, (3, 3), stride=1),
+            F.ReLU(),
+            F.BatchNorm2d(3),
+            F.ReLU(),
+            F.Conv2d(32, 32, (3, 3), stride=1)
 
+        )
 
 
     def forward(self, x):
         # x: [B,3,H,W]
         # TODO
+        x = x.unsqueeze(1)
+        x_pr = self.layers(x)
+        return x_pr
 
 
 class SimlarityRegNet(nn.Module):
@@ -49,6 +83,7 @@ def warping(src_fea, src_proj, ref_proj, depth_values):
         y, x = y.contiguous(), x.contiguous()
         y, x = y.view(H * W), x.view(H * W)
         # TODO
+
 
     # get warped_src_fea with bilinear interpolation (use 'grid_sample' function from pytorch)
     # TODO
