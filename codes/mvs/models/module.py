@@ -72,15 +72,12 @@ class SimlarityRegNet(nn.Module):
         )
         self.layers3 = nn.Sequential(
             F.ConvTranspose2d(32, 16, (3, 3), stride=2),
-            F.ReLU()
         )
         self.layers4 = nn.Sequential(
             F.ConvTranspose2d(16, 8, (3, 3), stride=2),
-            F.ReLU()
         )
         self.layersfinal = nn.Sequential(
             F.Conv2d(8, 1, (3, 3), stride=1),
-            F.ReLU()
         )
 
 
@@ -116,13 +113,32 @@ def warping(src_fea, src_proj, ref_proj, depth_values):
         y, x = y.contiguous(), x.contiguous()
         y, x = y.view(H * W), x.view(H * W)
         # TODO
-        x = x*rot + trans
+        xyz = torch.stack((x, y, torch.ones_like(x)))
+        xyz = torch.unsqueeze(xyz, 0).repeat(B, 1, 1)
+        rot_xyz = torch.matmul(rot, xyz)
+        rot_depth_xyz = rot_xyz.unsqueeze(2).repeat(1, 1, D, 1) * depth_values.view(B, 1, D, H * W)
+        proj_xyz = rot_depth_xyz + trans.view(B, 3, 1, 1)
+        # avoid negative depth
+        negative_depth_mask = proj_xyz[:, 2:] <= 1e-3
+        proj_xyz[:, 0:1][negative_depth_mask] = float(W)
+        proj_xyz[:, 1:2][negative_depth_mask] = float(H)
+        proj_xyz[:, 2:3][negative_depth_mask] = 1.0
+        proj_xy = proj_xyz[:, :2, :, :] / proj_xyz[:, 2:3, :, :]
+        proj_x_normalized = proj_xy[:, 0, :, :] / ((W - 1) / 2) - 1
+        proj_y_normalized = proj_xy[:, 1, :, :] / ((H - 1) / 2) - 1
+        proj_xy = torch.stack((proj_x_normalized, proj_y_normalized), dim=3)
+        grid = proj_xy
 
-    # get warped_src_fea with bilinear interpolation (use 'grid_sample' function from pytorch)
-    # TODO
-    warped_src_fea = F.grid_sample(src_fea, [x,y], mode='bilinear')
+    warped_src_fea = F.grid_sample(
+        src_fea,
+        grid.view(B, D * H, W, 2),
+        mode="bilinear",
+        padding_mode="zeros",
+        align_corners=True,
+    )
 
     return warped_src_fea
+
 
 def group_wise_correlation(ref_fea, warped_src_fea, G):
     # ref_fea: [B,C,H,W]
@@ -131,8 +147,8 @@ def group_wise_correlation(ref_fea, warped_src_fea, G):
     # TODO
     B, C, H, W = ref_fea.size()
     B, C, D, H, W = warped_src_fea.size()
-    ref_fea_s = np.split(ref_fea[B, :, H, W],G)
-    warped_src_fea_s = np.split(warped_src_fea[B, :, D, H, W],G)
+    ref_fea_s = np.split(ref_fea,[1,G,1,1])
+    warped_src_fea_s = np.split(warped_src_fea,[1,G,1,1,1])
     S_g = G*np.dot(ref_fea_s, warped_src_fea_s)/C
 
     return S_g
@@ -143,11 +159,8 @@ def depth_regression(p, depth_values):
     # p: probability volume [B, D, H, W]
     # depth_values: discrete depth values [B, D]
     # TODO
-    B, D, H, W = p.size()
-    for j in range(D-1):
-        reg_dep = reg_dep + depth_values[j]*p[j]
 
-    return reg_dep
+    return torch.sum(p*depth_values.view(depth_values.shape[0], 1, 1), dim=1).unsqueeze(1)
 
 def mvs_loss(depth_est, depth_gt, mask):
     # depth_est: [B,1,H,W]
