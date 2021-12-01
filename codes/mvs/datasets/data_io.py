@@ -5,26 +5,26 @@ from PIL import Image
 
 def read_cam_file(filename):
     # TODO
-    f = open(filename)
-    intrinsics = f.readlines()[1:4]
-    extrinsics = f.readlines()[6:8]
-    depth = f.readlines()[9]
-    depth_min = depth[0]
-    depth_max = depth[1]
+    with open(filename) as f:
+        lines = [line.rstrip() for line in f.readlines()]
+
+    extrinsics = np.fromstring(' '.join(lines[1:5]), dtype=np.float32, sep=' ').reshape((4, 4))
+    intrinsics = np.fromstring(' '.join(lines[7:10]), dtype=np.float32, sep=' ').reshape((3, 3))
+
+    if len(lines) >= 11:
+        depth_params = np.fromstring(lines[11], dtype=np.float32, sep=' ')
+    else:
+        depth_params = np.empty(0)
+
+    depth_min = depth_params[0]
+    depth_max = depth_params[1]
+
     return intrinsics, extrinsics, depth_min, depth_max
 
 def read_img(filename):
     # TODO
-    img = Image.open(filename).convert('RGBA')
-    arr = np.array(img)
-    for i in range(3):
-        minval = arr[...,i].min()
-        maxval = arr[...,i].max()
-        if minval != maxval:
-            arr[...,i] -= minval
-            arr[...,i] *= (1.0/(maxval-minval))
-
-    np_img = Image.fromarray(arr.astype('uint8'),'RGBA')
+    image = Image.open(filename)
+    np_img = np.array(image, dtype=np.float32) / 255.0
 
     return np_img
 
